@@ -1,0 +1,22 @@
+{
+  "name": "spark-line",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --env-file=.env server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "description": "",
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  },
+  "dependencies": {
+    "mongoose": "^8.12.1",
+    "node": "^23.9.0",
+    "openai": "^4.86.2",
+    "telegraf": "^4.16.3"
+  }
+}
