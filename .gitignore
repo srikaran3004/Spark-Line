@@ -6,6 +6,11 @@
 .env.test
 .env.production
 
+# Ignore specific environment variable files
+.env.example
+.env.sample
+.env.template
+
 # Node modules
 node_modules
 
@@ -18,5 +23,23 @@ npm-debug.log*
 # Runtime data
 pids
 *.pid
+
+# Ignore all files in the logs directory
+logs/*
+
+# Ignore all files in the node_modules directory
+node_modules/*
+
+# Ignore all files in the .env directory
+.env/*
+
+# Ignore all files in the .env.local directory
+.env.local/*
+
+# Ignore all files in the .env.development directory
+.env.development/*
+
+# Ignore all files in the .env.test directory
+.env.test/*
 
 
