@@ -55,6 +55,12 @@ bot.start(async (ctx) => {
 // Generate command handler
 bot.command('generate', async (ctx) => {
     const userId = ctx.update.message.from.id;
+    const firstName = ctx.update.message.from.first_name;
+    
+    // Send waiting message and get its ID
+    const waitingMessage = await ctx.reply(`⏳ Working on your social media posts, ${firstName}... Please wait a moment.`);
+    const waitingMessageId = waitingMessage.message_id;
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -65,6 +71,7 @@ bot.command('generate', async (ctx) => {
         });
         
         if (events.length === 0) {
+            await ctx.deleteMessage(waitingMessageId);
             return await ctx.reply("📌 No events logged for today. Start adding your events first!");
         }
         
@@ -76,9 +83,17 @@ bot.command('generate', async (ctx) => {
         const result = await model.generateContent(prompt);
         const response = await result.response.text();
         
+        // Delete waiting message and send response
+        await ctx.deleteMessage(waitingMessageId);
         await ctx.reply(response);
     } catch (err) {
         console.error("❌ Error in /generate:", err);
+        // Try to delete waiting message in case of error
+        try {
+            await ctx.deleteMessage(waitingMessageId);
+        } catch (deleteErr) {
+            console.error("Could not delete waiting message:", deleteErr);
+        }
         await ctx.reply('⚠️ Error generating posts. Please try again later.');
     }
 });
