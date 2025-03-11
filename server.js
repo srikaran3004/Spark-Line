@@ -17,7 +17,11 @@ try {
     process.exit(1);
 }
 
-// Start command handler
+/**
+ * Handle /start command
+ * Creates or updates user information in the database
+ * Sends a welcome message to the user
+ */
 bot.start(async (ctx) => {
     console.log('User Connected:', ctx.update.message.from);
     
@@ -52,7 +56,11 @@ bot.start(async (ctx) => {
     }
 });
 
-// Generate command handler
+/**
+ * Handle /generate command
+ * Fetches today's events and generates social media posts using Gemini AI
+ * Supports LinkedIn, Facebook, and Twitter post formats
+ */
 bot.command('generate', async (ctx) => {
     const userId = ctx.update.message.from.id;
     const firstName = ctx.update.message.from.first_name;
@@ -98,7 +106,11 @@ bot.command('generate', async (ctx) => {
     }
 });
 
-// Text message handler for logging events
+/**
+ * Handle incoming text messages
+ * Logs user events to the database
+ * Ignores messages that start with '/' (commands)
+ */
 bot.on(message('text'), async (ctx) => {
     // Skip processing commands
     if (ctx.update.message.text.startsWith('/')) {
@@ -117,7 +129,10 @@ bot.on(message('text'), async (ctx) => {
     }
 });
 
-// Help command
+/**
+ * Handle /help command
+ * Displays available commands and usage instructions
+ */
 bot.command('help', async (ctx) => {
     await ctx.reply(
         "🌟 *SparkLine Bot Help* 🌟\n\n" +
