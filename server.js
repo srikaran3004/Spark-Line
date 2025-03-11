@@ -1,119 +1,125 @@
-import {Telegraf} from 'telegraf'
+import { Telegraf } from 'telegraf';
 import userModel from './src/models/User.js';
 import eventModel from './src/models/Event.js';
 import connectDB from './src/config/db.js';
-import {message} from 'telegraf/filters';
-import OpenAI from 'openai';
-import { captureRejectionSymbol } from 'events';
-
+import { message } from 'telegraf/filters';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const client = new OpenAI({
-    apiKey: process.env['OPENAI_KEY'], // This is the default and can be omitted
-  });
-
-
-try{
-    connectDB();
-    console.log("Database Connected Sucessfully");
-}catch(err){
-    console.log(err);
-    process.kill(process.pid,'SIGTERM');
+// Connect to Database
+try {
+    await connectDB();
+    console.log("✅ Database Connected Successfully");
+} catch (err) {
+    console.error("❌ Database Connection Failed:", err);
+    process.exit(1);
 }
 
-
-
-bot.start(async(ctx)=>{
-    console.log('ctx',ctx);
-
-    //Creating a new user, if exists then update the user
-    const from=ctx.update.message.from;
-    try{
-        await userModel.findOneAndUpdate({
-            tgId:from.id,
-        },
-        {
-            $setOnInsert:{
-                firstName:from.first_name,
-                lastName:from.last_name,
-                username:from.username,
-                isBot:from.is_bot,
-                languageCode:from.language_code,
-            },
-        },{upsert:true,new:true});
-
-        //Store the user information into Database  
-        await ctx.reply(`Hey! ${from.first_name}, Welcome,🌟 I'm crafting captivating social media posts for you 🚀. Keep me in the loop with the latest events 😎. Let's elevate our social media game together! ✨ `);
-    }
-    catch(error){
-        console.log('error',error);
-        await ctx.reply('Experiencing Challenges!');
-    }
-
-});
-
-bot.command('generate',async(ctx)=>{
-    //get events for the user
-
-    const startOfDay = new Date();
-    startOfDay.setHours(0,0,0,0);
-
-    const endOfTheDay = new Date();
-    endOfTheDay.setHours(23,59,59,999);
-
-    const events = await eventModel.find({tgId:ctx.update.message.from.id,
-        createdAt:{
-            $gte:startOfDay,
-            $lte:endOfTheDay,
-        },
-    });
-    if(events.length===0){
-        await ctx.reply("No events for the day.");
-        return ;
-    }
-    console.log('events',events);
-
-    //make openai api call 
-     try{
-        const chatCompletion = await client.chat.completions.create({
-            messages: [
-                {role: "system", content: `Act as a senior copywriter, you write highly engaging posts for Linkedin, facbook and twitter using provided thoughts/events through out the day.`},
-                {role: "user", content: `Write like a human, for humans. Craft three engaging social media posts tailored for Linkedin, Facebook and Twitter Audiences.Use simple language. Use given time labels just to understand the order of the events, don't mention the time in the posts. Each post should creatively highlight the following events. Ensure the tone is conversational and impactful. Focus on engaging the respective platforms audience,encouraging Interaction and driving interest in the events: ${events.map((event) => event.text).join(', ')}`}
-            ],
-            model:process.env.OPENAI_MODEL,
-        });
-     }catch(err){
-
-     }
+// Start command handler
+bot.start(async (ctx) => {
+    console.log('User Connected:', ctx.update.message.from);
     
-    //store token count
-    //send response to the user
-    await ctx.reply('Generating posts...');
-
-});
-
-bot.on(message('text'),async(ctx)=>{
     const from = ctx.update.message.from;
-    const message = ctx.update.message.text;
-
-    try{
-        await eventModel.create({
-            text: message,
+    try {
+        const userUpdate = {
             tgId: from.id,
-        });
-        await ctx.reply('Logged info👍,Keep me posted on your thought process 🤖. To generate the posts, Please enter command: /generate');
-    }catch(err){
-        console.log(err);
-        await ctx.reply('Facing Challenges, Please try again later.');
+            firstName: from.first_name || "Unknown",
+            isBot: from.is_bot,
+            languageCode: from.language_code,
+        };
+        
+        // Only set these fields if they exist
+        if (from.last_name) {
+            userUpdate.lastName = from.last_name;
+        }
+        
+        if (from.username) {
+            userUpdate.userName = from.username;
+        }
+        
+        await userModel.findOneAndUpdate(
+            { tgId: from.id },
+            { $set: userUpdate },
+            { upsert: true, new: true }
+        );
+        
+        await ctx.reply(`Hey ${from.first_name}! 🌟 Welcome! I'm here to help you craft engaging social media posts 🚀. Just log your daily events, and I'll do the rest! ✨`);
+    } catch (error) {
+        console.error("❌ Error in /start:", error);
+        await ctx.reply('⚠️ Something went wrong, please try again later!');
     }
-
 });
 
+// Generate command handler
+bot.command('generate', async (ctx) => {
+    const userId = ctx.update.message.from.id;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    try {
+        const events = await eventModel.find({
+            tgId: userId,
+            createdAt: { $gte: today }
+        });
+        
+        if (events.length === 0) {
+            return await ctx.reply("📌 No events logged for today. Start adding your events first!");
+        }
+        
+        console.log('📝 Events:', events);
+        
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const prompt = `Act as a senior copywriter. Craft three engaging social media posts for LinkedIn, Facebook, and Twitter based on these events: ${events.map(e => e.text).join(', ')}. Keep the tone engaging and conversational.`;
+        
+        const result = await model.generateContent(prompt);
+        const response = await result.response.text();
+        
+        await ctx.reply(response);
+    } catch (err) {
+        console.error("❌ Error in /generate:", err);
+        await ctx.reply('⚠️ Error generating posts. Please try again later.');
+    }
+});
 
+// Text message handler for logging events
+bot.on(message('text'), async (ctx) => {
+    // Skip processing commands
+    if (ctx.update.message.text.startsWith('/')) {
+        return;
+    }
+    
+    const from = ctx.update.message.from;
+    const text = ctx.update.message.text;
+    
+    try {
+        await eventModel.create({ text, tgId: from.id });
+        await ctx.reply("✅ Event logged! To generate posts, type: /generate");
+    } catch (err) {
+        console.error("❌ Error logging event:", err);
+        await ctx.reply("⚠️ Couldn't save event. Please try again.");
+    }
+});
 
+// Help command
+bot.command('help', async (ctx) => {
+    await ctx.reply(
+        "🌟 *SparkLine Bot Help* 🌟\n\n" +
+        "Here's how to use me:\n\n" +
+        "1️⃣ Simply type your daily events as messages\n" +
+        "2️⃣ Use /generate to create social media posts based on your events\n" +
+        "3️⃣ Events are reset daily, so keep logging!\n\n" +
+        "Other commands:\n" +
+        "/start - Start the bot\n" +
+        "/help - Show this help message",
+        { parse_mode: 'Markdown' }
+    );
+});
+
+// Launch the bot
 bot.launch();
 
-// Graceful shutdown
-process.once('SIGINT',()=>bot.stop('SIGINT'));
-process.once('SIGTERM',()=>bot.stop('SIGTERM'));
+// Enable graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
